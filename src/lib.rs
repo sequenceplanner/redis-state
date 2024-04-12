@@ -2,13 +2,13 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::fmt::format;
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{anyhow, Context, Result};
 use redis::AsyncCommands;
 use redis::{Client, Msg, RedisError};
 
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use serde_json::Value;
-use serde::{Serialize, Deserialize};
 
 // mod redis_comm;
 
@@ -41,21 +41,18 @@ impl RedisState {
     }
 
     pub fn get<T: serde::de::DeserializeOwned>(&self, key: &str) -> Result<T> {
-        let v = self.get_value(key).ok_or(anyhow!("Key '{key}' is not found"))?;
+        let v = self
+            .get_value(key)
+            .ok_or(anyhow!("Key '{key}' is not found"))?;
         Ok(serde_json::from_value(v.clone())?)
-        
     }
 
     pub fn get_redis_key(&self, key: &str) -> Option<&RedisKey> {
         self.keys.iter().find(|k| k.key == key)
     }
 
-    pub fn get_value<'a>(
-        &'a self,
-        key: &str,
-    ) -> Option<&'a Value> {
-        key
-            .split('/')
+    pub fn get_value<'a>(&'a self, key: &str) -> Option<&'a Value> {
+        key.split('/')
             .try_fold(&self.state, |target, token| match target {
                 Value::Object(map) => map.get(&token as &str),
                 _ => None,
@@ -88,10 +85,6 @@ impl RedisState {
             })
             .context(format!("The key: '{key}' is not correct"))
     }
-
-
-
-
 }
 
 #[derive(Debug, Clone)]
@@ -169,7 +162,7 @@ mod tests {
         let time = std::time::Instant::now();
         for _ in 0..100000 {
             let n: u8 = rng.gen();
-            let i = rng.gen_range(0..keys.len()-1);
+            let i = rng.gen_range(0..keys.len() - 1);
             let key = keys[i];
             state.insert_or_update_value(key, json!(n)).unwrap();
         }
@@ -177,14 +170,12 @@ mod tests {
         println!("Duration: {}ms", duration.as_millis());
         println!("{}", serde_json::to_string_pretty(&state.state).unwrap());
         panic!("hej")
-
-
     }
 
     #[derive(Debug, Serialize, Deserialize)]
     struct Kalle {
         a: usize,
-        b: bool
+        b: bool,
     }
 
     impl Display for Kalle {
@@ -203,25 +194,25 @@ mod tests {
             RedisKey::new("a/c/a", KeyType::Key, Some(json!(1))),
         ]);
 
-        let k = Kalle{
-            a: 10,
-            b: false,
-        };
+        let k = Kalle { a: 10, b: false };
         println!("first");
         let res = state.insert_or_update("a/kalle", k);
         match res {
-            Ok(k) => {assert!(k); println!("{k}")},
+            Ok(k) => {
+                assert!(k);
+                println!("{k}")
+            }
             Err(k) => panic!("{k}"),
         }
 
         println!("change");
-        let k = Kalle{
-            a: 11,
-            b: true,
-        };
+        let k = Kalle { a: 11, b: true };
         let res = state.insert_or_update("a/kalle", k);
         match res {
-            Ok(k) => {assert!(k); println!("{k}")},
+            Ok(k) => {
+                assert!(k);
+                println!("{k}")
+            }
             Err(k) => panic!("{k}"),
         }
         let k1: Result<Kalle> = state.get("a/kalle");
@@ -231,29 +222,23 @@ mod tests {
         }
 
         println!("the same");
-        let k = Kalle{
-            a: 11,
-            b: true,
-        };
+        let k = Kalle { a: 11, b: true };
         let res = state.insert_or_update("a/kalle", k);
         match res {
-            Ok(k) => {assert!(!k); println!("{k}")},
+            Ok(k) => {
+                assert!(!k);
+                println!("{k}")
+            }
             Err(k) => panic!("{k}"),
         }
 
-        let k = Kalle{
-            a: 10,
-            b: false,
-        };
+        let k = Kalle { a: 10, b: false };
         println!("bad");
         let res = state.insert_or_update("a/b/a/kalle", k);
         match res {
             Ok(k) => panic!("Should be an error"),
             Err(k) => println!("{k}"),
         }
-
-
-
     }
 
     #[test]
@@ -287,6 +272,5 @@ mod tests {
             Ok(k) => println!("{k}"),
             Err(k) => println!("{k}"),
         }
-
     }
 }
